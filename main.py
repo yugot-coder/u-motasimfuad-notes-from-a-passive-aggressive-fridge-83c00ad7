@@ -42,6 +42,33 @@ def validate_entry(text: str) -> None:
     text.encode("utf-8")  # raises if the text is not valid UTF-8
 
 
+def verify_written_bytes(written: bytes) -> str:
+    """Verify the exact bytes read back from entry.txt.
+
+    Checks the byte length against the intended UTF-8 encoding, rejects a
+    trailing newline (the gate wants exactly one line, no terminator),
+    re-validates the decoded text, and compares the sha256 digest.
+    Returns the sha256 hex digest of the verified bytes.
+    """
+    intended = ENTRY.encode("utf-8")
+    if len(written) != len(intended):
+        raise SystemExit(
+            f"entry.txt is {len(written)} bytes, expected {len(intended)}"
+        )
+    if written.endswith(b"\n") or written.endswith(b"\r"):
+        raise SystemExit("entry.txt must not end with a newline")
+    text = written.decode("utf-8")
+    validate_entry(text)
+    digest = hashlib.sha256(written).hexdigest()
+    if digest != expected_digest():
+        raise SystemExit(
+            f"entry.txt digest {digest} != expected {expected_digest()}"
+        )
+    if text != ENTRY:
+        raise SystemExit("entry.txt content differs from ENTRY")
+    return digest
+
+
 def write_entry() -> str:
     """Write ENTRY to /output/entry.txt, read it back and verify it byte-identical.
 
@@ -57,16 +84,7 @@ def write_entry() -> str:
     # Read-back validation: re-read what was written and verify it.
     with open(path, "rb") as f:
         written = f.read()
-    text = written.decode("utf-8")
-    validate_entry(text)
-    digest = hashlib.sha256(written).hexdigest()
-    if digest != expected_digest():
-        raise SystemExit(
-            f"entry.txt digest {digest} != expected {expected_digest()}"
-        )
-    if text != ENTRY:
-        raise SystemExit("entry.txt content differs from ENTRY")
-    return digest
+    return verify_written_bytes(written)
 
 
 def main() -> None:
